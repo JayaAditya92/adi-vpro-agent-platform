@@ -1,8 +1,140 @@
-Install Git
--------------
+1) Software Installation
+    Install Python 3.12
 
-Create Repository
+    mac book
 
-https://github.com/JayaAditya92/adi-vpro-agent-platform.git
+    > python3 --version
+    > python3 -m pip --version
 
------------------------------------------------------------------------------------------
+    ----------------------------------
+
+    Install Node.js and npm
+
+    ----------------------------------
+
+    VSCode with AutoSave
+
+    ----------------------------------
+
+    VSCode Extensions
+
+    ----------------------------------
+
+    Install Git
+
+    ----------------------------------
+
+    Create Repository
+
+    https://github.com/toolsknowledge/vpro-agent-platform.git
+
+    -----------------------------------
+
+    Docker Desktop
+
+    -----------------------------------
+
+    Install AWS CLI
+
+    -----------------------------------
+
+    Aws Account 
+
+    -----------------------------------
+
+    Install Postman
+
+    -----------------------------------
+
+    Verification (MAC Book)
+    ***********************
+    python3 --version
+    python3 -m pip --version
+    node --version
+    npm --version
+    git --version
+    docker --version
+    docker compose version
+    aws --version
+    code --version
+
+
+Windows
+*******
+python --version
+python -m pip --version
+node --version
+npm --version
+git --version
+docker --version
+docker compose version
+aws --version
+code --version
+
+
+Day - 2
+*******
+1) npm create vite@latest frontend -- --template react
+
+
+new terminal
+2) > vpro-skill-agent
+   > mkdir backend
+   > cd backend
+   > mkdir app
+
+
+3) create requirements.txt
+    backend
+        requirements.txt
+
+ 
+4) cd backend
+   python3 -m venv venv
+   source venv/bin/activate (mac)
+   venv\Scripts\activate (Windows)
+   python -m pip install -r requirements.txt
+
+5) create main.py
+    backend
+         app 
+            main.py
+
+
+6) start server
+    > cd backend
+    python -m uvicorn app.main:app --reload
+
+    http://127.0.0.1:8000/docs
+
+7) modify
+        frontend/src/App.jsx
+        frontend/src/index.css
+
+        vpro-skill-agent/.gitignore
+
+
+8) cd frontend
+   npm run dev (start frontend)
+   backend also must be in running state
+   http://localhost:5173
+
+
+9) vpro-skill-agent
+        docker-compose.yml
+
+
+10) test the docker
+
+        > vpro-skill-agent
+        > docker compose up -d
+        > docker ps
+        > docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
+        > SELECT current_database();
+        > SELECT current_user;
+
+        ----------------------
+        docker compose down
+        docker compose up -d
+        docker ps
+
