@@ -1,4 +1,94 @@
-venv
-_pycache__/
-node_modules/
+
+# ==============================
+# Python
+# ==============================
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python packages
+*.egg-info/
+dist/
+build/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# ==============================
+# FastAPI
+# ==============================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ==============================
+# React / Node.js
+# ==============================
+
+node_modules/
+frontend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
+build/
+
+# Vite
+frontend/.vite/
+
+# ==============================
+# IDE / VS Code
+# ==============================
+
+.vscode/*
+!.vscode/extensions.json
+
+.idea/
+*.swp
+*.swo
+
+# ==============================
+# Operating System
+# ==============================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==============================
+# Docker
+# ==============================
+
+*.pid
+
+# ==============================
+# Testing
+# ==============================
+
+coverage/
+.nyc_output/
+
+# ==============================
+# Temporary files
+# ==============================
+
+*.tmp
+*.bak
+*.orig
