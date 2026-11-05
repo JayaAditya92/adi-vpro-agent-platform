@@ -31,7 +31,7 @@ def home():
     }
 
 #Health Check API
-@app.get("api/health")
+@app.get("/api/health")
 def health_check():
     return {
         "status": "success",
