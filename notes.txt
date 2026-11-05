@@ -132,9 +132,113 @@ new terminal
         > docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
         > SELECT current_database();
         > SELECT current_user;
+        > \l
+        > \q
 
         ----------------------
         docker compose down
         docker compose up -d
         docker ps
 
+Day - 3
+*******
+enable pgvector extension
+> docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
+
+> CREATE EXTENSION IF NOT EXISTS vector;
+
+SELECT extname, extversion
+FROM pg_extension
+WHERE extname = 'vector';
+
+\q
+
+------------------------------
+create requirements.txt
+    vpro-skill-agent
+        backend
+            requirements.txt
+
+    > cd backend
+    > source venv/bin/activate
+    > python -m pip install -r requirements.txt
+
+    python -m pip show sqlalchemy
+    python -m pip show psycopg
+    python -m pip show python-dotenv
+-------------------------------
+
+create .env file
+    backend
+        .env
+
+
+DATABASE_URL=postgresql+psycopg://vpro_user:vpro_password@localhost:5433/vpro_agent_db
+
+----------------------------------
+
+create database.py
+backend
+    app
+        database.py (db conf)
+        models.py (table info)
+        main.py (replace old code with latest code) (connect db to fastapi)
+
+docker ps
+python -m uvicorn app.main:app --reload
+http://127.0.0.1:8000/api/db-health
+http://127.0.0.1:8000/api/vector-health
+http://127.0.0.1:8000/api/documents/table-health
+
+docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
+\dt
+\d documents
+\q
+
+--------------------------------------------
+modify 
+    backend
+        requirements.txt (replace old libraries with latest libraries)
+
+        app
+            main.py (replace old endpoints with latest end poins)
+            models.py (replace)
+
+        > python -m pip install -r requirements.txt
+
+    frontend
+        src 
+            App.jsx
+            index.css
+
+Execute
+*******
+Terminal - 1
+docker compose down
+docker compose up -d
+docker ps
+
+
+Terminal - 2
+cd backend
+python -m uvicorn app.main:app --reload
+
+
+Terminal-3
+cd frontend
+npm run dev
+
+http://localhost:5173
+
+
+Testing
+create python_notes.txt (Root Folder)
+
+docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
+
+SELECT * FROM documents;
+
+SELECT filename, content
+FROM documents;
+
+\q
