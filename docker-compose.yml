@@ -1,0 +1,20 @@
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: vpro-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: vpro_user
+      POSTGRES_PASSWORD: vpro_password
+      POSTGRES_DB: vpro_agent_db
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
