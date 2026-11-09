@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -15,16 +14,32 @@ from pgvector.sqlalchemy import VECTOR
 from app.database import Base
 
 
-# Original uploaded documents
 class Document(Base):
-
     __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
-    filename = Column(String(255), nullable=False)
+    filename = Column(
+        String(255),
+        nullable=False
+    )
 
-    content = Column(Text, nullable=False)
+    content = Column(
+        Text,
+        nullable=False
+    )
+
+    # Unique SHA-256 hash of extracted document content
+    content_hash = Column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True
+    )
 
     created_at = Column(
         DateTime(timezone=True),
@@ -32,12 +47,14 @@ class Document(Base):
     )
 
 
-# Document chunks and embeddings
 class DocumentChunk(Base):
-
     __tablename__ = "document_chunks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
     document_id = Column(
         Integer,
@@ -46,11 +63,21 @@ class DocumentChunk(Base):
         index=True
     )
 
-    chunk_number = Column(Integer, nullable=False)
+    chunk_number = Column(
+        Integer,
+        nullable=False
+    )
 
-    content = Column(Text, nullable=False)
+    content = Column(
+        Text,
+        nullable=False
+    )
 
-    embedding = Column(VECTOR(1024), nullable=False)
+    # Amazon Titan Text Embeddings V2 - 1024 dimensions
+    embedding = Column(
+        VECTOR(1024),
+        nullable=False
+    )
 
     created_at = Column(
         DateTime(timezone=True),
