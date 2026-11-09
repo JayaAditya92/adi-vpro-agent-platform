@@ -8,6 +8,7 @@ function App() {
   const [documents, setDocuments] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [processingId, setProcessingId] = useState(null);
 
   async function loadDocuments() {
     try {
@@ -19,6 +20,7 @@ function App() {
 
       const data = await response.json();
       setDocuments(data);
+
     } catch (error) {
       setMessage(error.message);
     }
@@ -72,16 +74,46 @@ function App() {
     }
   }
 
+  async function processDocument(id) {
+    setProcessingId(id);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/documents/${id}/process`,
+        {
+          method: "POST"
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Processing failed");
+      }
+
+      setMessage(
+        `${data.filename}: ${data.total_chunks} chunks created with ${data.embedding_dimensions}-dimensional embeddings.`
+      );
+
+    } catch (error) {
+      setMessage(error.message);
+
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
   return (
     <div className="container">
 
       <h1>VPRO AI Agent Platform</h1>
 
-      <p>Document Upload and Management</p>
+      <p>Document Chunking and Embedding System</p>
 
       <div className="upload-card">
 
-        <h2>Upload Your Knowledge Documents</h2>
+        <h2>Upload Knowledge Documents</h2>
 
         <input
           id="documentFile"
@@ -90,9 +122,7 @@ function App() {
           onChange={(e) => setFile(e.target.files[0] || null)}
         />
 
-        {file && (
-          <p>Selected: {file.name}</p>
-        )}
+        {file && <p>Selected: {file.name}</p>}
 
         <button
           onClick={uploadDocument}
@@ -100,10 +130,6 @@ function App() {
         >
           {loading ? "Uploading..." : "Upload Document"}
         </button>
-
-        {message && (
-          <p className="message">{message}</p>
-        )}
 
       </div>
 
@@ -120,6 +146,7 @@ function App() {
                 <th>ID</th>
                 <th>Filename</th>
                 <th>Characters</th>
+                <th>Action</th>
               </tr>
             </thead>
 
@@ -129,6 +156,16 @@ function App() {
                   <td>{doc.id}</td>
                   <td>{doc.filename}</td>
                   <td>{doc.characters}</td>
+                  <td>
+                    <button
+                      onClick={() => processDocument(doc.id)}
+                      disabled={processingId !== null}
+                    >
+                      {processingId === doc.id
+                        ? "Processing..."
+                        : "Generate Embeddings"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -137,8 +174,14 @@ function App() {
 
       </div>
 
+      {message && (
+        <div className="message-card">
+          {message}
+        </div>
+      )}
+
       <p className="footer">
-        React + FastAPI + PostgreSQL
+        React + FastAPI + LangChain + Bedrock + PostgreSQL
       </p>
 
     </div>

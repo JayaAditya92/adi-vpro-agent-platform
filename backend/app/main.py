@@ -1,27 +1,30 @@
 
 from contextlib import asynccontextmanager
-from io import BytesIO
 
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pypdf import PdfReader
-from docx import Document as DocxDocument
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.database import engine, Base, get_db
 from app import models
+from app.embedding_service import generate_embedding
 
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
-
-
+# Create database extension and tables
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("CREATE EXTENSION IF NOT EXISTS vector")
+        )
+
     Base.metadata.create_all(bind=engine)
+
     yield
 
 
@@ -33,6 +36,7 @@ app = FastAPI(
 )
 
 
+# React frontend connection
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -45,34 +49,10 @@ app.add_middleware(
 )
 
 
-# Extract text from uploaded documents
-def extract_text(filename, file_content):
-
-    filename = filename.lower()
-
-    if filename.endswith(".pdf"):
-        reader = PdfReader(BytesIO(file_content))
-        return "\n".join(
-            page.extract_text() or ""
-            for page in reader.pages
-        )
-
-    elif filename.endswith(".docx"):
-        document = DocxDocument(BytesIO(file_content))
-        return "\n".join(
-            paragraph.text
-            for paragraph in document.paragraphs
-        )
-
-    elif filename.endswith(".txt"):
-        return file_content.decode("utf-8-sig")
-
-    raise ValueError("Unsupported file format")
-
-
 # Home API
 @app.get("/")
 def home():
+
     return {
         "message": "Welcome to VPRO Agent Platform",
         "status": "Backend Running"
@@ -82,6 +62,7 @@ def home():
 # Database health API
 @app.get("/api/db-health")
 def database_health(db: Session = Depends(get_db)):
+
     db.execute(text("SELECT 1"))
 
     return {
@@ -104,7 +85,7 @@ def vector_health(db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(
             status_code=500,
-            detail="pgvector extension is not enabled"
+            detail="pgvector is not enabled"
         )
 
     return {
@@ -114,90 +95,7 @@ def vector_health(db: Session = Depends(get_db)):
     }
 
 
-# Document table health API
-@app.get("/api/documents/table-health")
-def document_table_health(db: Session = Depends(get_db)):
-
-    db.execute(text("SELECT * FROM documents LIMIT 0"))
-
-    return {
-        "status": "success",
-        "message": "Documents table is ready"
-    }
-
-
-# Upload document API
-@app.post("/api/documents/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-
-    filename = file.filename or ""
-    extension = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF, DOCX and TXT files are allowed"
-        )
-
-    content = await file.read(MAX_FILE_SIZE + 1)
-
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail="File size must not exceed 10 MB"
-        )
-
-    if not content:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded file is empty"
-        )
-
-    try:
-        extracted_text = extract_text(filename, content)
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail="Unable to read document. Check the file format."
-        ) from error
-
-    if not extracted_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="No readable text found in document"
-        )
-
-    document = models.Document(
-        filename=filename,
-        content=extracted_text
-    )
-
-    try:
-        db.add(document)
-        db.commit()
-        db.refresh(document)
-
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to save document"
-        )
-
-    return {
-        "status": "success",
-        "message": "Document uploaded successfully",
-        "document_id": document.id,
-        "filename": document.filename,
-        "characters_extracted": len(extracted_text)
-    }
-
-
-# Retrieve uploaded documents
+# Upload document listing API
 @app.get("/api/documents")
 def get_documents(db: Session = Depends(get_db)):
 
@@ -209,10 +107,111 @@ def get_documents(db: Session = Depends(get_db)):
 
     return [
         {
-            "id": document.id,
-            "filename": document.filename,
-            "characters": len(document.content),
-            "created_at": document.created_at
+            "id": doc.id,
+            "filename": doc.filename,
+            "characters": len(doc.content),
+            "created_at": doc.created_at
         }
-        for document in documents
+        for doc in documents
+    ]
+
+
+# Process document into chunks and embeddings
+@app.post("/api/documents/{document_id}/process")
+def process_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+
+    document = db.get(models.Document, document_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    # Split document into smaller chunks
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=100
+    )
+
+    chunks = splitter.split_text(document.content)
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="No text available for chunking"
+        )
+
+    # Generate embeddings
+    processed_chunks = []
+
+    try:
+        for index, chunk in enumerate(chunks):
+
+            embedding = generate_embedding(chunk)
+
+            processed_chunks.append(
+                models.DocumentChunk(
+                    document_id=document.id,
+                    chunk_number=index + 1,
+                    content=chunk,
+                    embedding=embedding
+                )
+            )
+
+        # Replace previously generated chunks
+        db.query(models.DocumentChunk).filter(
+            models.DocumentChunk.document_id == document.id
+        ).delete(synchronize_session=False)
+
+        db.add_all(processed_chunks)
+        db.commit()
+
+    except Exception as error:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=502,
+            detail="Embedding generation or database storage failed"
+        ) from error
+
+    return {
+        "status": "success",
+        "message": "Document chunked and embedded successfully",
+        "document_id": document.id,
+        "filename": document.filename,
+        "total_chunks": len(chunks),
+        "embedding_dimensions": 1024
+    }
+
+
+# Retrieve document chunks
+@app.get("/api/documents/{document_id}/chunks")
+def get_document_chunks(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+
+    chunks = (
+        db.query(models.DocumentChunk)
+        .filter(
+            models.DocumentChunk.document_id == document_id
+        )
+        .order_by(models.DocumentChunk.chunk_number)
+        .all()
+    )
+
+    return [
+        {
+            "id": chunk.id,
+            "document_id": chunk.document_id,
+            "chunk_number": chunk.chunk_number,
+            "content": chunk.content,
+            "embedding_dimensions": len(chunk.embedding)
+        }
+        for chunk in chunks
     ]
