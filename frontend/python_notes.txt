@@ -1,0 +1,8 @@
+Python is a programming language.
+
+Python supports variables, functions, loops and conditions.
+
+Python is widely used in Artificial Intelligence,
+Machine Learning, Data Science and Web Development.
+
+Python supports Object Oriented Programming.
