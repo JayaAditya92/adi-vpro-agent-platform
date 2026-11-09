@@ -242,3 +242,220 @@ SELECT filename, content
 FROM documents;
 
 \q
+
+
+Day-4
+*****
+
+backend
+    requirements.txt (replace old code with latest code)
+
+
+---------------------------
+enable aws bedrock services (pdf file)
+---------------------------
+
+----------------------------------
+aws configure via terminal
+
+> aws configure
+AWS Access Key ID: YOUR_ACCESS_KEY
+AWS Secret Access Key: YOUR_SECRET_KEY
+Default region name: us-east-1
+Default output format: json 
+aws sts get-caller-identity
+------------------------------------------
+
+
+----------------------------------------
+backend
+    .env
+    app
+        embedding_service.py
+        models.py
+        main.py
+
+frontend
+        src
+            App.jsx
+            index.css
+--------------------------------------------------
+
+
+Execute
+docker compose down
+docker compose up -d
+
+Terminal-1
+python -m uvicorn app.main:app --reload
+
+Terminal-2
+cd frontend
+npm run dev
+
+Local: http://localhost:5173/
+
+-------------------------------------------------
+Nov-7 | Day-6
+
+
+step-1
+check backene/.env file for port number
+it must be 5433
+
+DATABASE_URL=postgresql+psycopg://vpro_user:vpro_password@localhost:5433/vpro_agent_db
+
+AWS_REGION=us-east-1
+BEDROCK_EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0
+EMBEDDING_DIMENSIONS=1024
+
+
+2) update the below files (Reason: we are identified duplicate records in db)
+        backend 
+            app
+                models.py
+                main.py
+
+        src
+            App.jsx
+
+
+3) root directory
+    > vpro-skill-agent
+
+    > docker compose down
+    > docker compose up -d
+    > docker ps
+
+    cd backend
+    source venv/bin/activate
+    python -m uvicorn app.main:app --reload
+
+    http://localhost:8000/api/documents
+
+
+    docker exec -it vpro-postgres psql -U vpro_user -d vpro_agent_db
+    SELECT id, filename, LENGTH(content) AS characters, content_hash
+    FROM documents
+    ORDER BY id;
+
+    SELECT filename, MD5(content), COUNT(*)
+    FROM documents
+    GROUP BY filename, MD5(content)
+    HAVING COUNT(*) > 1;
+
+
+    SELECT
+    document_id,
+    COUNT(*) AS total_chunks,
+    MIN(vector_dims(embedding)) AS dimensions
+    FROM document_chunks
+    GROUP BY document_id;
+
+    SELECT indexname, indexdef
+    FROM pg_indexes
+    WHERE tablename = 'documents'
+    AND indexname = 'ix_documents_content_hash';
+
+
+----------------------------
+add the below functionality
+
+ask the question....functionality
+
+backend
+    app 
+        main.py (replace with updated code)
+
+frontend
+    src
+        App.jsx
+        index.css
+
+Terminal-1
+**********
+docker compose down
+docker compose up -d
+docker ps
+
+Terminal-2
+**********
+cd backend
+source venv/bin/activate
+python -m uvicorn app.main:app --reload
+
+http://127.0.0.1:8000/docs
+/api/search
+{
+  "query": "What is Python?"
+}
+
+Terminal-3
+**********
+cd frontend
+npm run dev
+
+
+------------------------------------
+1) aws sts get-caller-identity
+
+2) update .env file
+    backend/.env
+
+3) update backend/requirements.txt
+    > cd backend
+    > source venv/bin/activate
+    > python -m pip install -r requirements.txt
+
+4) create backend/app/rag_service.py
+
+5) models backend/app/main.py
+
+6) cd backend
+source venv/bin/activate
+python -m uvicorn app.main:app --reload
+
+
+7) create testing file
+    backend/test_bedrock.py
+
+
+8) Confirm AWS account.
+Select user vpro-agentic-ai-user.
+Open Permissions.
+Select Add permissions.
+Select Create inline policy.
+Select the JSON tab.
+
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowNova2LiteInference",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:us-east-1:xxxxxxxx:inference-profile/us.amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+      ]
+    }
+  ]
+}
+
+Policy name: VPROBedrockNova2LiteAccess
+Create policy.
+
+IAM → Users → vpro-agentic-ai-user → Permissions.
+
+
+python test_bedrock.py
+
+BEDROCK CONNECTION SUCCESSFUL
+
+MODEL RESPONSE:
+
+Python is a programming language...
+-------------------------------------------------------
