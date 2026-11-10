@@ -2,6 +2,7 @@
 import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
+from pydantic import BaseModel, Field
 
 from fastapi import (
     FastAPI,
@@ -30,6 +31,13 @@ from app.embedding_service import generate_embedding
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=2000
+    )
 
 
 # --------------------------------------------------
@@ -580,3 +588,82 @@ def get_document_chunks(
         }
         for chunk in chunks
     ]
+
+    # --------------------------------------------------
+# Semantic Search using pgvector
+# --------------------------------------------------
+
+@app.post("/api/search")
+def semantic_search(
+    request: SearchRequest,
+    db: Session = Depends(get_db)
+):
+
+    query_text = request.query.strip()
+
+    if not query_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty"
+        )
+
+    # Step 1: Generate embedding for the question
+    try:
+        query_embedding = generate_embedding(query_text)
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to generate query embedding. Check AWS Bedrock access."
+        ) from error
+
+    # Step 2: Calculate cosine distance
+    distance = models.DocumentChunk.embedding.cosine_distance(
+        query_embedding
+    )
+
+    # Step 3: Retrieve the top 3 closest chunks
+    try:
+        results = (
+            db.query(
+                models.DocumentChunk,
+                models.Document.filename,
+                distance.label("distance")
+            )
+            .join(
+                models.Document,
+                models.Document.id == models.DocumentChunk.document_id
+            )
+            .order_by(distance.asc())
+            .limit(3)
+            .all()
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to search document embeddings"
+        ) from error
+
+    # Step 4: Format results
+    search_results = []
+
+    for chunk, filename, cosine_distance in results:
+
+        distance_value = float(cosine_distance)
+
+        search_results.append({
+            "document_id": chunk.document_id,
+            "filename": filename,
+            "chunk_number": chunk.chunk_number,
+            "content": chunk.content,
+            "cosine_distance": round(distance_value, 4),
+            "cosine_similarity": round(1 - distance_value, 4)
+        })
+
+    return {
+        "status": "success",
+        "query": query_text,
+        "total_results": len(search_results),
+        "results": search_results
+    }

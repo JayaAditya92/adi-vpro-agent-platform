@@ -7,50 +7,66 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #f1f5f9;
+  color: #1e293b;
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1150px;
   margin: auto;
   padding: 40px 20px;
 }
 
-h1 {
+.page-header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.page-header h1 {
   color: #173f75;
-  text-align: center;
+  font-size: 34px;
 }
 
-.container > p {
-  text-align: center;
+.page-header p {
   color: #64748b;
+  font-size: 17px;
 }
 
-.upload-card,
-.documents-card {
+.card {
   background: white;
-  padding: 25px;
+  padding: 28px;
   margin-top: 25px;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
 }
 
 h2 {
   color: #173f75;
+  margin-top: 0;
 }
 
-input {
+input[type="file"] {
   display: block;
   margin: 20px 0;
   max-width: 100%;
 }
 
+.selected-file {
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
 button {
   background: #173f75;
   color: white;
-  padding: 11px 16px;
+  padding: 12px 18px;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
+  font-size: 14px;
+}
+
+button:hover {
+  background: #245696;
 }
 
 button:disabled {
@@ -58,13 +74,9 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.message-card {
-  background: white;
-  padding: 20px;
-  margin-top: 20px;
-  border-radius: 8px;
-  color: #15803d;
-  overflow-wrap: anywhere;
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
 }
 
 table {
@@ -74,7 +86,7 @@ table {
 
 th,
 td {
-  padding: 12px;
+  padding: 13px;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
   overflow-wrap: anywhere;
@@ -84,18 +96,119 @@ th {
   background: #f1f5f9;
 }
 
-.footer {
-  margin-top: 30px;
-  text-align: center;
+.message-card {
+  background: white;
+  padding: 18px;
+  margin-top: 20px;
+  border-radius: 8px;
+  color: #15803d;
+  overflow-wrap: anywhere;
+}
+
+.search-card > p {
   color: #64748b;
 }
 
+.search-card textarea {
+  width: 100%;
+  display: block;
+  padding: 14px;
+  margin: 18px 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: Arial, sans-serif;
+  font-size: 15px;
+  resize: vertical;
+}
+
+.search-card textarea:focus {
+  outline: none;
+  border-color: #173f75;
+  box-shadow: 0 0 0 3px rgba(23, 63, 117, 0.1);
+}
+
+.search-message {
+  margin-top: 18px;
+  color: #173f75;
+  overflow-wrap: anywhere;
+}
+
+.results-container {
+  margin-top: 28px;
+}
+
+.results-container h3 {
+  color: #173f75;
+}
+
+.result-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 20px;
+  margin-top: 15px;
+  background: #fbfdff;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.result-header h4 {
+  margin: 0;
+  color: #173f75;
+}
+
+.result-header span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.result-card > p {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.result-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.result-metrics span {
+  background: #eaf0f8;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  margin-top: 35px;
+  text-align: center;
+  color: #64748b;
+  line-height: 1.6;
+}
+
 @media (max-width: 650px) {
-  .documents-card {
-    overflow-x: auto;
+  .container {
+    padding: 20px 12px;
   }
 
-  table {
-    min-width: 600px;
+  .page-header h1 {
+    font-size: 26px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .result-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
