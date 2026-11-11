@@ -1,0 +1,23 @@
+/* Lesson 10: MCP Agent interface */
+.mcp-agent-card { display:flex; flex-direction:column; gap:16px; }
+.mcp-agent-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.mcp-agent-heading h2 { margin-bottom:6px; }
+.mcp-agent-heading p { margin:0; color:#64748b; }
+.mcp-agent-status { padding:7px 12px; border-radius:20px; background:#dcfce7; color:#166534; font-size:12px; font-weight:600; white-space:nowrap; }
+.mcp-agent-messages { min-height:280px; max-height:520px; overflow-y:auto; padding:16px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+.mcp-agent-welcome { padding:45px 12px; text-align:center; color:#475569; }
+.mcp-agent-examples { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:18px; }
+.mcp-agent-examples button { padding:9px 13px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; cursor:pointer; }
+.mcp-agent-message { max-width:85%; margin-bottom:14px; padding:13px; border-radius:10px; overflow-wrap:anywhere; }
+.mcp-agent-message.user { margin-left:auto; background:#dbeafe; color:#1e3a8a; }
+.mcp-agent-message.assistant { margin-right:auto; border:1px solid #e2e8f0; background:#fff; color:#1e293b; }
+.mcp-agent-message-content { margin-top:7px; line-height:1.6; white-space:pre-wrap; }
+.mcp-agent-tool-calls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid #e2e8f0; color:#475569; font-size:12px; }
+.mcp-agent-tool-calls span { padding:4px 8px; border-radius:5px; background:#ede9fe; color:#5b21b6; }
+.mcp-agent-loading { color:#2563eb; font-size:14px; }
+.mcp-agent-error { margin:0; padding:10px 12px; border-radius:8px; background:#fee2e2; color:#991b1b; }
+.mcp-agent-input { display:flex; align-items:stretch; gap:10px; }
+.mcp-agent-input textarea { flex:1; min-width:0; resize:vertical; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; }
+.mcp-agent-input button { padding:10px 20px; border:0; border-radius:8px; background:#2563eb; color:#fff; cursor:pointer; }
+.mcp-agent-input button:disabled { opacity:.55; cursor:not-allowed; }
+@media (max-width:600px) { .mcp-agent-heading { align-items:flex-start; flex-direction:column; } .mcp-agent-message { max-width:100%; } .mcp-agent-input { flex-direction:column; } }

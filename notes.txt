@@ -300,7 +300,7 @@ Nov-7 | Day-6
 
 
 step-1
-check backene/.env file for port number
+check backend/.env file for port number
 it must be 5433
 
 DATABASE_URL=postgresql+psycopg://vpro_user:vpro_password@localhost:5433/vpro_agent_db
@@ -459,3 +459,304 @@ MODEL RESPONSE:
 
 Python is a programming language...
 -------------------------------------------------------
+
+10-Nov-2026
+***********
+
+frontend
+        src
+            App.jsx
+            index.css
+
+backend
+        app
+            main.py
+            models.py
+            rag_service.py
+
+update above files with modified code
+
+----------------------------------
+Terminal - 1
+
+docker compose down
+
+docker compose up -d
+
+docker ps 
+
+Terminal - 2
+
+cd backend
+source venv/bin/activate
+python -m uvicorn app.main:app --reload
+
+
+Terminal-3
+
+cd frontend
+npm run dev
+
+http://localhost:5173
+
+
+
+
+Lesson - 8
+
+backend/requirements.txt
+langgraph (add this library)
+
+> cd backend
+> source venv/bin/activate
+> python -m pip install -r requirements.txt
+
+backend/app/agent_graph.py
+backend/app/main.py
+
+.env
+RAG_TOP_K=3
+RAG_MAX_COSINE_DISTANCE=0.65
+
+questions:
+**********
+What is Python?
+Explain its main features.
+Explain the first feature with an example.
+What is Java?
+
+Testing questions
+*****************
+I've prepared a sample knowledge-base document specifically for testing your VPRO Agentic AI application through Swagger, from Lesson 3 to Lesson 9.
+
+VPRO Swagger Test Knowledge Document
+
+Ready
+
+Contains Python, Java, RAG, embeddings, pgvector, conversation memory, LangGraph and Agentic AI topics.
+
+Download test document (.docx)
+
+# Swagger testing – Follow this exact sequence
+
+Open [FastAPI Swagger](http://localhost:8000/docs?utm_source=chatgpt.com).
+
+## Part 1 – Database and document upload
+
+| Step | API                          | Operation                  |
+| ---- | ---------------------------- | -------------------------- |
+| 1    | `GET /api/db-health`         | Verify PostgreSQL          |
+| 2    | `GET /api/vector-health`     | Verify pgvector            |
+| 3    | `POST /api/documents/upload` | Upload the downloaded DOCX |
+| 4    | `GET /api/documents`         | Find your document ID      |
+
+## Part 2 – Chunking and embeddings
+
+| Step | API                                         | Operation                      |
+| ---- | ------------------------------------------- | ------------------------------ |
+| 5    | `POST /api/documents/{document_id}/process` | Generate chunks and embeddings |
+| 6    | `GET /api/documents/{document_id}/chunks`   | Inspect chunks                 |
+
+Use the document ID returned in Step 3.
+
+## Part 3 – Semantic search
+
+Use `POST /api/search`.
+
+Test:
+
+```
+{
+  "query": "What are the main features of Python?"
+}
+```
+
+Then try:
+
+```
+{
+  "query": "Explain the role of pgvector in RAG."
+}
+```
+
+## Part 4 – RAG question answering
+
+Use `POST /api/rag/ask`.
+
+```
+{
+  "question": "Explain the stages of a RAG pipeline."
+}
+```
+
+Another test:
+
+```
+{
+  "question": "What is the difference between Python and Java?"
+}
+```
+
+## Part 5 – Conversation memory
+
+First create a session using `POST /api/chat/sessions`.
+
+Then use `POST /api/chat`:
+
+```
+{
+  "session_id": 1,
+  "question": "What is Python?"
+}
+```
+
+Follow-up:
+
+```
+{
+  "session_id": 1,
+  "question": "What are its main features?"
+}
+```
+
+Use the actual session ID returned by your API, not necessarily `1`.
+
+## Part 6 – LangGraph
+
+Use your React chat interface or the Lesson 8 chat endpoint.
+
+Test in sequence:
+
+1. What is an embedding?
+2. Why do we use embeddings?
+3. What is cosine distance?
+4. Explain its role in semantic search.
+5. What is LangGraph?
+6. Explain conditional edges.
+7. What happens when no relevant document is found?
+
+## Part 7 – Agentic AI tools
+
+Use `POST /api/agent/ask`.
+
+Test 1 – Calculator
+
+```
+{
+  "question": "Calculate (250 * 4) + 150"
+}
+```
+
+Expected result: `1150`.
+
+Test 2 – Knowledge search
+
+```
+{
+  "question": "Search my uploaded document and explain pgvector."
+}
+```
+
+Test 3 – Multiple tools
+
+```
+{
+  "question": "Search my uploaded document for RAG and calculate 25 * 40."
+}
+```
+
+Expected calculation: `1000`.
+
+Test 4 – General question
+
+```
+{
+  "question": "What is Agentic AI?"
+}
+```
+
+Recommended: Complete each part before proceeding to the next. This will help identify exactly which API or component needs attention if an error occurs.
+
+
+11-Nov-2026
+***********
+
+backend
+      app
+        agent_graph.py
+        agentic_tools.py
+        database.py
+        embedding_service.py
+        main.py
+        mcp_agent_api.py
+        mcp_client.py
+        mcp_langgraph_agent.py
+        mcp_server.py
+        models.py
+        rag_service.py
+
+      .env
+
+      requirements.txt
+
+      test_bedrock.py
+      test_mcp_langgraph.py
+
+frontend
+    src
+      App.jsx
+      index.css
+      MCPAgent.jsx
+      MCPAgent.css
+
+
+Terminal - 1
+************
+docker compose down
+
+docker compose up -d
+
+docker ps
+
+
+Terminal - 2
+************
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
+Terminal-3
+**********
+cd backend
+source venv/bin/activate
+python -m app.mcp_server
+
+Terminal-4
+**********
+npx -y @modelcontextprotocol/inspector
+
+http://localhost:6274
+
+Top:
+    add servers
+        add manullay
+            server id : vpro-server
+            Transport : streamable-http
+            url : http://127.0.0.1:8001/mcp
+
+            connect
+
+  
+    tools
+        1) Calculator
+        2) search_knowledge_base
+
+    (250 * 4) + 150
+
+    What are the main features of Python?
+
+Terminal - 5
+
+    cd frontend
+    npm run dev
+

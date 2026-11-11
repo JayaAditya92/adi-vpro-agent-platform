@@ -3,6 +3,9 @@ import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pydantic import BaseModel, Field
+from app.rag_service import generate_rag_answer
+from app.mcp_agent_api import router as mcp_agent_router
+
 
 from fastapi import (
     FastAPI,
@@ -26,7 +29,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.database import engine, Base, get_db
 from app import models
 from app.embedding_service import generate_embedding
-
+from app.agent_graph import run_rag_agent
+from app.agentic_tools import run_tool_agent
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -38,6 +42,21 @@ class SearchRequest(BaseModel):
         min_length=1,
         max_length=2000
     )
+class RAGRequest(BaseModel):
+    question: str = Field(
+        min_length=1,
+        max_length=2000
+    )
+
+
+class ChatRequest(BaseModel):
+    session_id: int
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class AgentRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    session_id: int | None = None
 
 
 # --------------------------------------------------
@@ -200,6 +219,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.include_router(mcp_agent_router)
 
 
 # --------------------------------------------------
@@ -589,7 +609,8 @@ def get_document_chunks(
         for chunk in chunks
     ]
 
-    # --------------------------------------------------
+
+# --------------------------------------------------
 # Semantic Search using pgvector
 # --------------------------------------------------
 
@@ -666,4 +687,366 @@ def semantic_search(
         "query": query_text,
         "total_results": len(search_results),
         "results": search_results
+    }
+
+# --------------------------------------------------
+# RAG Question Answering
+# --------------------------------------------------
+
+@app.post("/api/rag/ask")
+def ask_rag_question(
+    request: RAGRequest,
+    db: Session = Depends(get_db)
+):
+
+    question = request.question.strip()
+
+    if not question:
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty"
+        )
+
+    # Step 1: Generate question embedding
+    try:
+        query_embedding = generate_embedding(question)
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to generate question embedding"
+        ) from error
+
+    # Step 2: Retrieve the top 3 relevant chunks
+    distance = models.DocumentChunk.embedding.cosine_distance(
+        query_embedding
+    )
+
+    try:
+        results = (
+            db.query(
+                models.DocumentChunk,
+                models.Document.filename,
+                distance.label("distance")
+            )
+            .join(
+                models.Document,
+                models.Document.id == models.DocumentChunk.document_id
+            )
+            .order_by(distance.asc())
+            .limit(3)
+            .all()
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve document context"
+        ) from error
+
+    if not results:
+        raise HTTPException(
+            status_code=404,
+            detail="No processed document chunks found. Generate embeddings first."
+        )
+
+    # Step 3: Prepare retrieved context
+    retrieved_chunks = []
+
+    for chunk, filename, cosine_distance in results:
+
+        retrieved_chunks.append({
+            "filename": filename,
+            "document_id": chunk.document_id,
+            "chunk_number": chunk.chunk_number,
+            "content": chunk.content,
+            "cosine_distance": round(float(cosine_distance), 4)
+        })
+
+    # Step 4: Generate answer using LangChain and Bedrock
+    try:
+        answer = generate_rag_answer(
+            question,
+            retrieved_chunks
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to generate answer using Amazon Bedrock. Check model access and IAM permissions."
+        ) from error
+
+    # Step 5: Return answer and source information
+    return {
+        "status": "success",
+        "question": question,
+        "answer": answer,
+        "total_sources": len(retrieved_chunks),
+        "sources": [
+            {
+                "document_id": chunk["document_id"],
+                "filename": chunk["filename"],
+                "chunk_number": chunk["chunk_number"],
+                "cosine_distance": chunk["cosine_distance"]
+            }
+            for chunk in retrieved_chunks
+        ]
+    }
+
+
+# --------------------------------------------------
+# Lesson 7: Conversation memory and chat history
+# --------------------------------------------------
+
+@app.post("/api/chat/sessions")
+def create_chat_session(db: Session = Depends(get_db)):
+    """Create a new conversation session."""
+    session = models.ChatSession(title="New Conversation")
+
+    try:
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create chat session"
+        ) from error
+
+    return {
+        "id": session.id,
+        "title": session.title,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at
+    }
+
+
+@app.get("/api/chat/sessions")
+def list_chat_sessions(db: Session = Depends(get_db)):
+    """Return conversation sessions, newest activity first."""
+    sessions = (
+        db.query(models.ChatSession)
+        .order_by(models.ChatSession.updated_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": session.id,
+            "title": session.title,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at
+        }
+        for session in sessions
+    ]
+
+
+@app.get("/api/chat/sessions/{session_id}/messages")
+def get_chat_messages(
+    session_id: int,
+    db: Session = Depends(get_db)
+):
+    """Return all messages belonging to one conversation."""
+    session = db.get(models.ChatSession, session_id)
+
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    messages = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_id == session_id)
+        .order_by(models.ChatMessage.id.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": message.id,
+            "session_id": message.session_id,
+            "role": message.role,
+            "content": message.content,
+            "created_at": message.created_at
+        }
+        for message in messages
+    ]
+
+
+@app.post("/api/chat")
+def chat_with_memory(
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Answer a question using retrieved document chunks and the
+    latest five conversation turns (up to ten messages).
+    """
+    question = request.question.strip()
+
+    if not question:
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty"
+        )
+
+    session = db.get(models.ChatSession, request.session_id)
+
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found. Create a session first."
+        )
+
+    # Fetch the latest 10 messages, then restore chronological order.
+    recent_messages = (
+        db.query(models.ChatMessage)
+        .filter(models.ChatMessage.session_id == session.id)
+        .order_by(models.ChatMessage.id.desc())
+        .limit(10)
+        .all()
+    )
+    recent_messages.reverse()
+
+    history = [
+        {"role": message.role, "content": message.content}
+        for message in recent_messages
+    ]
+
+    # Lesson 8: Run retrieval, retrieval evaluation, and answer generation
+    # through the compiled LangGraph workflow.
+    try:
+        graph_result = run_rag_agent(
+            question=question,
+            history=history,
+            db=db
+        )
+        answer = graph_result["answer"]
+        retrieved_chunks = graph_result["retrieved_chunks"]
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "LangGraph RAG workflow failed. Check the backend terminal "
+                "for the detailed error and verify Bedrock/database access."
+            )
+        ) from error
+
+    # Save both messages only after answer generation succeeds.
+    try:
+        user_message = models.ChatMessage(
+            session_id=session.id,
+            role="user",
+            content=question
+        )
+        assistant_message = models.ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=answer
+        )
+
+        db.add_all([user_message, assistant_message])
+
+        if session.title == "New Conversation":
+            session.title = question[:100]
+
+        db.commit()
+        db.refresh(user_message)
+        db.refresh(assistant_message)
+
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="The answer was generated, but the chat messages could not be saved."
+        ) from error
+
+    return {
+        "status": "success",
+        "session_id": session.id,
+        "question": question,
+        "answer": answer,
+        "search_query": graph_result["search_query"],
+        "retrieval_status": graph_result["retrieval_status"],
+        "total_sources": len(retrieved_chunks),
+        "sources": [
+            {
+                "document_id": chunk["document_id"],
+                "filename": chunk["filename"],
+                "chunk_number": chunk["chunk_number"],
+                "cosine_distance": chunk["cosine_distance"]
+            }
+            for chunk in retrieved_chunks
+        ],
+        "messages": [
+            {
+                "id": user_message.id,
+                "role": user_message.role,
+                "content": user_message.content
+            },
+            {
+                "id": assistant_message.id,
+                "role": assistant_message.role,
+                "content": assistant_message.content
+            }
+        ]
+    }
+
+
+# --------------------------------------------------
+# Lesson 9: Agentic AI tool calling
+# --------------------------------------------------
+
+@app.post("/api/agent/ask")
+def ask_agent(request: AgentRequest, db: Session = Depends(get_db)):
+    """Run the tool-calling agent with optional conversation history."""
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    history = []
+    session = None
+    if request.session_id is not None:
+        session = db.get(models.ChatSession, request.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        previous = (
+            db.query(models.ChatMessage)
+            .filter(models.ChatMessage.session_id == session.id)
+            .order_by(models.ChatMessage.id.desc())
+            .limit(10)
+            .all()
+        )
+        previous.reverse()
+        history = [{"role": item.role, "content": item.content} for item in previous]
+
+    try:
+        result = run_tool_agent(question=question, history=history, db=db)
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Tool-calling agent failed. Check the backend terminal for the detailed error and verify Bedrock tool-use access."
+        ) from error
+
+    if session is not None:
+        try:
+            db.add_all([
+                models.ChatMessage(session_id=session.id, role="user", content=question),
+                models.ChatMessage(session_id=session.id, role="assistant", content=result["answer"]),
+            ])
+            if session.title == "New Conversation":
+                session.title = question[:100]
+            db.commit()
+        except Exception as error:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Agent answered, but chat history could not be saved.") from error
+
+    return {
+        "status": "success",
+        "question": question,
+        "answer": result["answer"],
+        "tool_calls": result["tool_calls"],
+        "tools_available": ["calculator", "search_knowledge_base"],
     }

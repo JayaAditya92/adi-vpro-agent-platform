@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./MCPAgent.css";
 
 const API_URL = "http://localhost:8000";
 
@@ -14,6 +15,19 @@ function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState("");
+
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatQuestion, setChatQuestion] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [creatingSession, setCreatingSession] = useState(false);
+
+  // Lesson 10: MCP-powered Agent state
+  const [mcpQuestion, setMcpQuestion] = useState("");
+  const [mcpMessages, setMcpMessages] = useState([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpError, setMcpError] = useState("");
 
   async function loadDocuments() {
     try {
@@ -33,6 +47,7 @@ function App() {
 
   useEffect(() => {
     loadDocuments();
+    loadChatSessions();
   }, []);
 
   async function uploadDocument() {
@@ -164,6 +179,173 @@ function App() {
 
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function loadChatSessions() {
+    try {
+      const response = await fetch(`${API_URL}/api/chat/sessions`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Unable to load chat sessions");
+      }
+
+      const data = await response.json();
+      setChatSessions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setSearchMessage(error.message);
+      setChatSessions([]);
+    }
+  }
+
+async function createChatSession() {
+  if (creatingSession) return;
+
+  setCreatingSession(true);
+  setSearchMessage("");
+
+  try {
+    const response = await fetch(`${API_URL}/api/chat/sessions`, {
+      method: "POST"
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Unable to create chat session");
+    }
+
+    // The FastAPI endpoint returns the primary key as "id".
+    if (!Number.isInteger(data.id)) {
+      throw new Error("The server did not return a valid chat session ID.");
+    }
+
+    setActiveSessionId(data.id);
+    setChatMessages([]);
+    await loadChatSessions();
+  } catch (error) {
+    setSearchMessage(error.message);
+  } finally {
+    setCreatingSession(false);
+  }
+}
+
+async function openChatSession(sessionId) {
+  const validSessionId = Number(sessionId);
+
+  if (!Number.isInteger(validSessionId) || validSessionId <= 0) {
+    setSearchMessage("Invalid conversation ID. Please create a new conversation.");
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/chat/sessions/${validSessionId}/messages`
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Unable to load conversation");
+    }
+
+    setActiveSessionId(validSessionId);
+    setChatMessages(Array.isArray(data) ? data : []);
+    setSearchMessage("");
+  } catch (error) {
+    setSearchMessage(error.message);
+  }
+}
+
+async function sendChatMessage() {
+  if (!chatQuestion.trim() || !Number.isInteger(Number(activeSessionId)) || Number(activeSessionId) <= 0) {
+    return;
+  }
+
+  const question = chatQuestion.trim();
+
+  setChatQuestion("");
+  setChatLoading(true);
+
+  setChatMessages((previous) => [
+    ...previous,
+    {
+      role: "user",
+      content: question
+    }
+  ]);
+
+  try {
+    const response = await fetch(`${API_URL}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        session_id: Number(activeSessionId),
+        question
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Chat request failed");
+    }
+
+    setChatMessages((previous) => [
+      ...previous,
+      {
+        role: "assistant",
+        content: data.answer
+      }
+    ]);
+
+    await loadChatSessions();
+
+  } catch (error) {
+    setChatMessages((previous) => [
+      ...previous,
+      {
+        role: "assistant",
+        content: `Error: ${error.message}`
+      }
+    ]);
+
+  } finally {
+    setChatLoading(false);
+  }
+}
+
+  async function sendMCPMessage(event) {
+    event.preventDefault();
+    const question = mcpQuestion.trim();
+    if (!question || mcpLoading) return;
+
+    setMcpQuestion("");
+    setMcpError("");
+    setMcpMessages((previous) => [...previous, { role: "user", content: question }]);
+    setMcpLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/mcp-agent/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "MCP Agent request failed");
+
+      setMcpMessages((previous) => [...previous, {
+        role: "assistant",
+        content: data.answer || "The agent returned an empty answer.",
+        toolCalls: Array.isArray(data.tool_calls) ? data.tool_calls : []
+      }]);
+    } catch (error) {
+      setMcpError(error.message || "Unable to contact the MCP Agent.");
+    } finally {
+      setMcpLoading(false);
     }
   }
 
@@ -316,9 +498,152 @@ function App() {
         )}
       </section>
 
+      {/* Lesson 10: MCP-powered Agent */}
+      <section className="card mcp-agent-card">
+        <div className="mcp-agent-heading">
+          <div>
+            <h2>VPRO MCP Agent</h2>
+            <p>LangGraph + Amazon Bedrock + MCP Tools</p>
+          </div>
+          <span className="mcp-agent-status">MCP Agent</span>
+        </div>
+
+        <div className="mcp-agent-messages">
+          {mcpMessages.length === 0 && (
+            <div className="mcp-agent-welcome">
+              <h3>Ask the VPRO AI Agent</h3>
+              <p>Ask a question, perform a calculation, or search your uploaded course documents.</p>
+              <div className="mcp-agent-examples">
+                <button type="button" onClick={() => setMcpQuestion("Calculate 250 multiplied by 4 plus 150.")}>Test calculator</button>
+                <button type="button" onClick={() => setMcpQuestion("What are the main features of Python? Use my uploaded knowledge documents.")}>Search Python knowledge</button>
+              </div>
+            </div>
+          )}
+
+          {mcpMessages.map((item, index) => (
+            <div key={`mcp-${index}`} className={`mcp-agent-message ${item.role}`}>
+              <strong>{item.role === "user" ? "You" : "VPRO AI Agent"}</strong>
+              <div className="mcp-agent-message-content">{item.content}</div>
+              {item.toolCalls?.length > 0 && (
+                <div className="mcp-agent-tool-calls">
+                  <strong>Tools invoked:</strong>
+                  {item.toolCalls.map((call, callIndex) => (
+                    <span key={`${call.tool}-${callIndex}`}>{call.tool}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {mcpLoading && <p className="mcp-agent-loading">Agent is thinking and executing tools...</p>}
+        </div>
+
+        {mcpError && <p className="mcp-agent-error" role="alert">{mcpError}</p>}
+
+        <form className="mcp-agent-input" onSubmit={sendMCPMessage}>
+          <textarea
+            value={mcpQuestion}
+            onChange={(event) => setMcpQuestion(event.target.value)}
+            placeholder="Ask the MCP-powered agent..."
+            rows={2}
+            disabled={mcpLoading}
+          />
+          <button type="submit" disabled={mcpLoading || !mcpQuestion.trim()}>
+            {mcpLoading ? "Processing..." : "Send"}
+          </button>
+        </form>
+      </section>
+
       <footer className="footer">
         React + FastAPI + LangChain + Amazon Bedrock + PostgreSQL + pgvector
       </footer>
+
+      {/* Conversation Memory and Chat History */}
+
+<section className="card conversation-card">
+
+  <h2>AI Conversational Assistant</h2>
+
+  <div className="chat-layout">
+
+    <aside className="chat-sidebar">
+
+      <button onClick={createChatSession} disabled={creatingSession}>
+        {creatingSession ? "Creating..." : "+ New Conversation"}
+      </button>
+
+      <h3>Chat History</h3>
+
+      {chatSessions.map((session) => (
+        <button
+          key={session.id}
+          className={
+            activeSessionId === session.id
+              ? "session-button active"
+              : "session-button"
+          }
+          onClick={() => openChatSession(session.id)}
+        >
+          {session.title}
+        </button>
+      ))}
+
+    </aside>
+
+    <div className="chat-window">
+
+      <div className="chat-messages">
+
+        {chatMessages.length === 0 && (
+          <p className="chat-empty">
+            Start a new conversation and ask a question.
+          </p>
+        )}
+
+        {chatMessages.map((message, index) => (
+          <div
+            key={message.id || `pending-${index}`}
+            className={`chat-message ${message.role}`}
+          >
+            <strong>
+              {message.role === "user" ? "You" : "AI Assistant"}
+            </strong>
+
+            <p>{message.content}</p>
+          </div>
+        ))}
+
+        {chatLoading && (
+          <p className="chat-loading">
+            AI Assistant is thinking...
+          </p>
+        )}
+
+      </div>
+
+      <div className="chat-input-area">
+
+        <textarea
+          value={chatQuestion}
+          onChange={(e) => setChatQuestion(e.target.value)}
+          placeholder="Ask a question or follow-up..."
+          rows={2}
+          disabled={!activeSessionId || chatLoading}
+        />
+
+        <button
+          onClick={sendChatMessage}
+          disabled={!activeSessionId || chatLoading || !chatQuestion.trim()}
+        >
+          {chatLoading ? "Sending..." : "Send"}
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
 
     </div>
   );
