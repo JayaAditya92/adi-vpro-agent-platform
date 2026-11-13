@@ -1,0 +1,64 @@
+[
+    {
+        "question": "What is Python?",
+        "retrieved_contexts": [
+            "Python is a programming language.\n\nPython supports variables, functions, loops and conditions.\n\nPython is widely used in Artificial Intelligence, Machine Learning, Data Science and Web Development.\n\nPython supports Object Oriented Programming."
+        ],
+        "generated_answer": "Python is a programming language.",
+        "reference_answer": "Python is a programming language.",
+        "required_keywords": [
+            "programming language"
+        ]
+    },
+    {
+        "question": "Which basic programming concepts does Python support?",
+        "retrieved_contexts": [
+            "Python supports variables, functions, loops and conditions."
+        ],
+        "generated_answer": "Python supports variables, functions, loops and conditions.",
+        "reference_answer": "Python supports variables, functions, loops and conditions.",
+        "required_keywords": [
+            "variables",
+            "functions",
+            "loops",
+            "conditions"
+        ]
+    },
+    {
+        "question": "In which areas is Python widely used?",
+        "retrieved_contexts": [
+            "Python is widely used in Artificial Intelligence, Machine Learning, Data Science and Web Development."
+        ],
+        "generated_answer": "Python is widely used in Artificial Intelligence, Machine Learning, Data Science and Web Development.",
+        "reference_answer": "Python is widely used in Artificial Intelligence, Machine Learning, Data Science and Web Development.",
+        "required_keywords": [
+            "artificial intelligence",
+            "machine learning",
+            "data science",
+            "web development"
+        ]
+    },
+    {
+        "question": "Does Python support Object Oriented Programming?",
+        "retrieved_contexts": [
+            "Python supports Object Oriented Programming."
+        ],
+        "generated_answer": "Yes. Python supports Object Oriented Programming.",
+        "reference_answer": "Yes. Python supports Object Oriented Programming.",
+        "required_keywords": [
+            "object oriented programming"
+        ]
+    },
+    {
+        "question": "Does the knowledge document mention Python variables and functions?",
+        "retrieved_contexts": [
+            "Python supports variables, functions, loops and conditions."
+        ],
+        "generated_answer": "Yes. The document mentions that Python supports variables and functions.",
+        "reference_answer": "Yes. The document states that Python supports variables and functions.",
+        "required_keywords": [
+            "variables",
+            "functions"
+        ]
+    }
+]

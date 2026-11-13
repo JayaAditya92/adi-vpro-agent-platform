@@ -13,3 +13,10 @@ langchain-aws
 langgraph
 langchain-core
 mcp[cli]>=1.28,<2
+ragas
+langchain-openai 
+datasets
+langchain-community==0.4.1
+litellm
+pytest
+httpx

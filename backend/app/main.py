@@ -5,8 +5,8 @@ from io import BytesIO
 from pydantic import BaseModel, Field
 from app.rag_service import generate_rag_answer
 from app.mcp_agent_api import router as mcp_agent_router
-
-
+from app.evaluation_dashboard import router as evaluation_dashboard_router
+from app.prompt_manager import get_prompt_metadata
 from fastapi import (
     FastAPI,
     Depends,
@@ -17,7 +17,7 @@ from fastapi import (
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -31,6 +31,7 @@ from app import models
 from app.embedding_service import generate_embedding
 from app.agent_graph import run_rag_agent
 from app.agentic_tools import run_tool_agent
+from app.security_service import moderation_check
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -220,7 +221,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.include_router(mcp_agent_router)
-
+app.include_router(evaluation_dashboard_router)
 
 # --------------------------------------------------
 # React CORS
@@ -480,12 +481,22 @@ def get_documents(db: Session = Depends(get_db)):
         .all()
     )
 
+    chunk_counts = dict(
+        db.query(
+            models.DocumentChunk.document_id,
+            func.count(models.DocumentChunk.id)
+        )
+        .group_by(models.DocumentChunk.document_id)
+        .all()
+    )
+
     return [
         {
             "id": doc.id,
             "filename": doc.filename,
             "characters": len(doc.content),
-            "created_at": doc.created_at
+            "created_at": doc.created_at,
+            "chunks": chunk_counts.get(doc.id, 0)
         }
         for doc in documents
     ]
@@ -707,7 +718,23 @@ def ask_rag_question(
             detail="Question cannot be empty"
         )
 
-    # Step 1: Generate question embedding
+    # Step 1: Security check BEFORE embeddings, database retrieval, or Bedrock.
+    security_result = moderation_check(question)
+
+    if not security_result["allowed"]:
+        return {
+            "status": "blocked",
+            "question": question,
+            "answer": "Request blocked by security checks.",
+            "security": {
+                "category": security_result.get("category"),
+                "reason": security_result["reason"],
+            },
+            "total_sources": 0,
+            "sources": [],
+        }
+
+    # Step 2: Generate question embedding only after input is approved.
     try:
         query_embedding = generate_embedding(question)
 
@@ -782,6 +809,7 @@ def ask_rag_question(
         "question": question,
         "answer": answer,
         "total_sources": len(retrieved_chunks),
+        "prompt_version": get_prompt_metadata("rag_answer"),
         "sources": [
             {
                 "document_id": chunk["document_id"],
@@ -971,6 +999,7 @@ def chat_with_memory(
         "search_query": graph_result["search_query"],
         "retrieval_status": graph_result["retrieval_status"],
         "total_sources": len(retrieved_chunks),
+        "prompt_versions": graph_result["prompt_versions"],
         "sources": [
             {
                 "document_id": chunk["document_id"],
@@ -1030,7 +1059,11 @@ def ask_agent(request: AgentRequest, db: Session = Depends(get_db)):
             detail="Tool-calling agent failed. Check the backend terminal for the detailed error and verify Bedrock tool-use access."
         ) from error
 
-    if session is not None:
+    security = result.get("security", {})
+    is_blocked = security.get("status") == "blocked"
+
+    # Do not store blocked prompt-injection attempts in normal chat history.
+    if session is not None and not is_blocked:
         try:
             db.add_all([
                 models.ChatMessage(session_id=session.id, role="user", content=question),
@@ -1044,9 +1077,10 @@ def ask_agent(request: AgentRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=500, detail="Agent answered, but chat history could not be saved.") from error
 
     return {
-        "status": "success",
+        "status": "blocked" if is_blocked else "success",
         "question": question,
         "answer": result["answer"],
         "tool_calls": result["tool_calls"],
         "tools_available": ["calculator", "search_knowledge_base"],
+        "security": security,
     }

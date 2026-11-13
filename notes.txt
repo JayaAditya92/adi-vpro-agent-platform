@@ -300,7 +300,7 @@ Nov-7 | Day-6
 
 
 step-1
-check backend/.env file for port number
+check backene/.env file for port number
 it must be 5433
 
 DATABASE_URL=postgresql+psycopg://vpro_user:vpro_password@localhost:5433/vpro_agent_db
@@ -759,4 +759,10 @@ Terminal - 5
 
     cd frontend
     npm run dev
+
+
+
+
+
+  
 

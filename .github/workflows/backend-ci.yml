@@ -1,0 +1,70 @@
+
+name: VPRO Skills Backend CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend Quality Checks
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql+psycopg://ci_user:ci_password@localhost:5432/ci_database
+      AWS_REGION: us-east-1
+      BEDROCK_EMBEDDING_MODEL_ID: amazon.titan-embed-text-v2:0
+      EMBEDDING_DIMENSIONS: 1024
+      BEDROCK_CHAT_MODEL_ID: us.amazon.nova-2-lite-v1:0
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Backend Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Python Files
+        run: |
+          python -m compileall -q app tests
+
+      - name: Create Reports Directory
+        run: mkdir -p reports
+
+      - name: Run Automated Tests
+        run: |
+          python -m pytest -v --junitxml=reports/pytest-results.xml
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpro-backend-test-results
+          path: backend/reports/pytest-results.xml
+          if-no-files-found: ignore
